@@ -41,28 +41,50 @@ void mandelbrot_cpu_scalar(uint32_t img_size, uint32_t max_iters, uint32_t *out)
 /// <--- your code here --->
 
 void mandelbrot_cpu_vector(uint32_t img_size, uint32_t max_iters, uint32_t *out) {
+    float32x4_t voff = {0, 1, 2, 3};
+    float32x4_t vimg_size_lane = vdupq_n_f32(float(img_size));
+    float32x4_t vescape_condition = vdupq_n_f32(float(4));
+    uint32x4_t vone = vdupq_n_u32(float(1));
+
     for (uint64_t i = 0; i < img_size; ++i) {
-        for (uint64_t j = 0; j < img_size; ++j) {
-            // Get the plane coordinate X for the image pixel.
-            float cx = (float(j) / float(img_size)) * 2.5f - 2.0f;
-            float cy = (float(i) / float(img_size)) * 2.5f - 1.25f;
+        // broadcast across all lanes
+        float32x4_t cy = vdupq_n_f32((float(i) / float(img_size)) * 2.5f - 1.25f);
+        
+        // 4 elements are calculated at the same time so inc by 4
+        for (uint64_t j = 0; j < img_size; j += 4) {
+            // Get the plane coordinate X for the 4 image pixel.
+            float32x4_t indices_x =  vaddq_f32(vdupq_n_f32(float(j)), voff);
+            float32x4_t scaled_idx_x = vmulq_f32(vdivq_f32(indices_x, vimg_size_lane), vdupq_n_f32(2.5f));
+
+            float32x4_t cx = vsubq_f32(scaled_idx_x, vdupq_n_f32(2.0f));
 
             // Innermost loop: start the recursion from z = 0.
-            float x2 = 0.0f;
-            float y2 = 0.0f;
-            float w = 0.0f;
+            float32x4_t x2 = vdupq_n_f32(0.0f);
+            float32x4_t y2 = vdupq_n_f32(0.0f);
+            float32x4_t w = vdupq_n_f32(0.0f);
+            uint32x4_t iters_lane = vdupq_n_u32(0);
+            uint32x4_t masks = vdupq_n_u32(0xFFFFFFFF); // 0 means escaped lane
             uint32_t iters = 0;
-            while (x2 + y2 <= 4.0f && iters < max_iters) {
-                float x = x2 - y2 + cx;
-                float y = w + cy;
-                x2 = x * x;
-                y2 = y * y;
-                w = 2*x*y;
+
+            while (iters < max_iters) {
+                masks = vandq_u32(masks, vcleq_f32(vaddq_f32(x2,y2), vescape_condition));
+                if(vmaxvq_u32(masks) == 0) break;
+
+                iters_lane = vaddq_u32(iters_lane, vandq_u32(masks, vone));
+
+                float32x4_t x = vaddq_f32(vsubq_f32(x2, y2), cx);
+                float32x4_t y = vaddq_f32(vsubq_f32(vsubq_f32(w, x2), y2), cy);
+                x2 = vmulq_f32(x, x);
+                y2 = vmulq_f32(y, y);
+                float32x4_t z = vaddq_f32(x, y);
+                w = vmulq_f32(z,z);
+
                 ++iters;
             }
 
             // Write result.
-            out[i * img_size + j] = iters;
+            // out[i * img_size + j] = iters;
+            vst1q_u32(out + (i*img_size + j), iters_lane);
         }
     }
 }
