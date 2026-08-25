@@ -62,18 +62,19 @@ void mandelbrot_cpu_vector(uint32_t img_size, uint32_t max_iters, uint32_t *out)
             float32x4_t x2 = vdupq_n_f32(0.0f);
             float32x4_t y2 = vdupq_n_f32(0.0f);
             float32x4_t w = vdupq_n_f32(0.0f);
-            uint32x4_t iters_lane = vdupq_n_u32(0);
+            uint32x4_t iters_lane = vdupq_n_u32(0); // escape counters for each pixel
             uint32x4_t masks = vdupq_n_u32(0xFFFFFFFF); // 0 means escaped lane
             uint32_t iters = 0;
 
             while (iters < max_iters) {
-                masks = vandq_u32(masks, vcleq_f32(vaddq_f32(x2,y2), vescape_condition));
-                if(vmaxvq_u32(masks) == 0) break;
-
-                iters_lane = vaddq_u32(iters_lane, vandq_u32(masks, vone));
-
                 float32x4_t x = vaddq_f32(vsubq_f32(x2, y2), cx);
                 float32x4_t y = vaddq_f32(vsubq_f32(vsubq_f32(w, x2), y2), cy);
+                // check to see if we have passed escape threshold
+                masks = vandq_u32(masks, vcleq_f32(vaddq_f32(x2,y2), vescape_condition)); 
+                if(vmaxvq_u32(masks) == 0) break; // all lanes escaped
+
+                // add one to only lanes that havent escaped yet
+                iters_lane = vaddq_u32(iters_lane, vandq_u32(masks, vone));
                 x2 = vmulq_f32(x, x);
                 y2 = vmulq_f32(y, y);
                 float32x4_t z = vaddq_f32(x, y);
