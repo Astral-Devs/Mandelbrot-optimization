@@ -5,7 +5,7 @@
 
 #include <cmath>
 #include <cstdint>
-#include <immintrin.h>
+#include <arm_neon.h>
 
 // CPU Scalar Mandelbrot set generation.
 // Based on the "optimized escape time algorithm" in
@@ -41,7 +41,30 @@ void mandelbrot_cpu_scalar(uint32_t img_size, uint32_t max_iters, uint32_t *out)
 /// <--- your code here --->
 
 void mandelbrot_cpu_vector(uint32_t img_size, uint32_t max_iters, uint32_t *out) {
-    // TODO: Implement this function.
+    for (uint64_t i = 0; i < img_size; ++i) {
+        for (uint64_t j = 0; j < img_size; ++j) {
+            // Get the plane coordinate X for the image pixel.
+            float cx = (float(j) / float(img_size)) * 2.5f - 2.0f;
+            float cy = (float(i) / float(img_size)) * 2.5f - 1.25f;
+
+            // Innermost loop: start the recursion from z = 0.
+            float x2 = 0.0f;
+            float y2 = 0.0f;
+            float w = 0.0f;
+            uint32_t iters = 0;
+            while (x2 + y2 <= 4.0f && iters < max_iters) {
+                float x = x2 - y2 + cx;
+                float y = w + cy;
+                x2 = x * x;
+                y2 = y * y;
+                w = 2*x*y;
+                ++iters;
+            }
+
+            // Write result.
+            out[i * img_size + j] = iters;
+        }
+    }
 }
 
 /// <--- /your code here --->
