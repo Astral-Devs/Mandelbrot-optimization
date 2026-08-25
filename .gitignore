@@ -1,0 +1,12 @@
+# Compiled binaries
+mandelbrot
+*.o
+*.out
+
+# Generated output images
+out/
+
+
+# VScode
+
+.vscode/
