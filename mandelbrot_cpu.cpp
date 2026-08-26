@@ -46,9 +46,13 @@ void mandelbrot_cpu_vector(uint32_t img_size, uint32_t max_iters, uint32_t *out)
     float32x4_t vescape_condition = vdupq_n_f32(float(4));
     uint32x4_t vone = vdupq_n_u32(float(1));
 
-    for (uint64_t i = 0; i < img_size; ++i) {
-        // broadcast across all lanes
-        float32x4_t cy = vdupq_n_f32((float(i) / float(img_size)) * 2.5f - 1.25f);
+    for (uint64_t i = 0; i < img_size; i += 4) {
+        // 4 y values broadcasted
+        float32x4_t cy_0 = vdupq_n_f32((float(i) / float(img_size)) * 2.5f - 1.25f);
+        float32x4_t cy_1 = vdupq_n_f32((float(i+1) / float(img_size)) * 2.5f - 1.25f);
+        float32x4_t cy_2 = vdupq_n_f32((float(i+2) / float(img_size)) * 2.5f - 1.25f);
+        float32x4_t cy_3 = vdupq_n_f32((float(i+3) / float(img_size)) * 2.5f - 1.25f);
+
         
         // 4 elements are calculated at the same time so inc by 4
         for (uint64_t j = 0; j < img_size; j += 4) {
@@ -58,34 +62,88 @@ void mandelbrot_cpu_vector(uint32_t img_size, uint32_t max_iters, uint32_t *out)
 
             float32x4_t cx = vsubq_f32(scaled_idx_x, vdupq_n_f32(2.0f));
 
-            // Innermost loop: start the recursion from z = 0.
-            float32x4_t x2 = vdupq_n_f32(0.0f);
-            float32x4_t y2 = vdupq_n_f32(0.0f);
-            float32x4_t w = vdupq_n_f32(0.0f);
-            uint32x4_t iters_lane = vdupq_n_u32(0); // escape counters for each pixel
-            uint32x4_t masks = vdupq_n_u32(0xFFFFFFFF); // 0 means escaped lane
+            // Each x, y, w, iterlane are meant for one specific y-coordiante
+            float32x4_t x2_0 = vdupq_n_f32(0.0f);
+            float32x4_t x2_1 = vdupq_n_f32(0.0f);
+            float32x4_t x2_2 = vdupq_n_f32(0.0f);
+            float32x4_t x2_3 = vdupq_n_f32(0.0f);
+
+            float32x4_t y2_0 = vdupq_n_f32(0.0f);
+            float32x4_t y2_1 = vdupq_n_f32(0.0f);
+            float32x4_t y2_2 = vdupq_n_f32(0.0f);
+            float32x4_t y2_3 = vdupq_n_f32(0.0f);
+
+            float32x4_t w_0 = vdupq_n_f32(0.0f);
+            float32x4_t w_1 = vdupq_n_f32(0.0f);
+            float32x4_t w_2 = vdupq_n_f32(0.0f);
+            float32x4_t w_3 = vdupq_n_f32(0.0f);
+
+            uint32x4_t iters_lane_0 = vdupq_n_u32(0); // escape counters for each pixel
+            uint32x4_t iters_lane_1 = vdupq_n_u32(0);
+            uint32x4_t iters_lane_2 = vdupq_n_u32(0);
+            uint32x4_t iters_lane_3 = vdupq_n_u32(0);
+
+            uint32x4_t masks_0 = vdupq_n_u32(0xFFFFFFFF); // 0 means escaped lane
+            uint32x4_t masks_1 = vdupq_n_u32(0xFFFFFFFF);
+            uint32x4_t masks_2 = vdupq_n_u32(0xFFFFFFFF);
+            uint32x4_t masks_3 = vdupq_n_u32(0xFFFFFFFF);
+
             uint32_t iters = 0;
 
             while (iters < max_iters) {
-                float32x4_t x = vaddq_f32(vsubq_f32(x2, y2), cx);
-                float32x4_t y = vaddq_f32(vsubq_f32(vsubq_f32(w, x2), y2), cy);
                 // check to see if we have passed escape threshold
-                masks = vandq_u32(masks, vcleq_f32(vaddq_f32(x2,y2), vescape_condition)); 
-                if(vmaxvq_u32(masks) == 0) break; // all lanes escaped
+                masks_0 = vandq_u32(masks_0, vcleq_f32(vaddq_f32(x2_0,y2_0), vescape_condition)); 
+                masks_1 = vandq_u32(masks_1, vcleq_f32(vaddq_f32(x2_1,y2_1), vescape_condition)); 
+                masks_2 = vandq_u32(masks_2, vcleq_f32(vaddq_f32(x2_2,y2_2), vescape_condition)); 
+                masks_3 = vandq_u32(masks_3, vcleq_f32(vaddq_f32(x2_3,y2_3), vescape_condition)); 
+
+                if(vmaxvq_u32(vorrq_u32(vorrq_u32(masks_0, masks_1), vorrq_u32(masks_2, masks_3))) == 0) break; // all lanes escaped
 
                 // add one to only lanes that havent escaped yet
-                iters_lane = vaddq_u32(iters_lane, vandq_u32(masks, vone));
-                x2 = vmulq_f32(x, x);
-                y2 = vmulq_f32(y, y);
-                float32x4_t z = vaddq_f32(x, y);
-                w = vmulq_f32(z,z);
+                iters_lane_0 = vaddq_u32(iters_lane_0, vandq_u32(masks_0, vone));
+                iters_lane_1 = vaddq_u32(iters_lane_1, vandq_u32(masks_1, vone));
+                iters_lane_2 = vaddq_u32(iters_lane_2, vandq_u32(masks_2, vone));
+                iters_lane_3 = vaddq_u32(iters_lane_3, vandq_u32(masks_3, vone));
+
+
+                float32x4_t x_0 = vaddq_f32(vsubq_f32(x2_0, y2_0), cx);
+                float32x4_t x_1 = vaddq_f32(vsubq_f32(x2_1, y2_1), cx);
+                float32x4_t x_2 = vaddq_f32(vsubq_f32(x2_2, y2_2), cx);
+                float32x4_t x_3 = vaddq_f32(vsubq_f32(x2_3, y2_3), cx);
+
+                float32x4_t y_0 = vaddq_f32(vsubq_f32(vsubq_f32(w_0, x2_0), y2_0), cy_0);
+                float32x4_t y_1 = vaddq_f32(vsubq_f32(vsubq_f32(w_1, x2_1), y2_1), cy_1);
+                float32x4_t y_2 = vaddq_f32(vsubq_f32(vsubq_f32(w_2, x2_2), y2_2), cy_2);
+                float32x4_t y_3 = vaddq_f32(vsubq_f32(vsubq_f32(w_3, x2_3), y2_3), cy_3);
+
+                x2_0 = vmulq_f32(x_0, x_0);
+                x2_1 = vmulq_f32(x_1, x_1);
+                x2_2 = vmulq_f32(x_2, x_2);
+                x2_3 = vmulq_f32(x_3, x_3);
+                
+                y2_0 = vmulq_f32(y_0, y_0);
+                y2_1 = vmulq_f32(y_1, y_1);
+                y2_2 = vmulq_f32(y_2, y_2);
+                y2_3 = vmulq_f32(y_3, y_3);
+
+                float32x4_t z_0 = vaddq_f32(x_0, y_0);
+                float32x4_t z_1 = vaddq_f32(x_1, y_1);
+                float32x4_t z_2 = vaddq_f32(x_2, y_2);
+                float32x4_t z_3 = vaddq_f32(x_3, y_3);
+
+                w_0 = vmulq_f32(z_0, z_0);
+                w_1 = vmulq_f32(z_1, z_1);
+                w_2 = vmulq_f32(z_2, z_2);
+                w_3 = vmulq_f32(z_3, z_3);
 
                 ++iters;
             }
 
             // Write result.
-            // out[i * img_size + j] = iters;
-            vst1q_u32(out + (i*img_size + j), iters_lane);
+            vst1q_u32(out + (i*img_size + j), iters_lane_0);
+            vst1q_u32(out + ((i+1)*img_size + j), iters_lane_1);
+            vst1q_u32(out + ((i+2)*img_size + j), iters_lane_2);
+            vst1q_u32(out + ((i+3)*img_size + j), iters_lane_3);
         }
     }
 }
@@ -282,8 +340,8 @@ void dump_image(
 //  g++ -march=native -O3 -Wall -Wextra -o mandelbrot mandelbrot_cpu.cc
 int main(int argc, char *argv[]) {
     // Get Mandelbrot spec.
-    uint32_t img_size = 256;
-    uint32_t max_iters = 1000;
+    uint32_t img_size = 1024;
+    uint32_t max_iters = 2000;
     enum MandelbrotImpl impl = ALL;
     if (ParseArgsAndMakeSpec(argc, argv, &img_size, &max_iters, &impl))
         return -1;
