@@ -359,7 +359,7 @@ We notice quite a large speedup however, unlike before larger images have a high
 
 As it currently stands, a large portion of the pixels iterate until we reach the cap, meaning that we could try to identify the pixels that would reach the maximum and exit early. I estimate a speedup of around 1.3x could be achievable compared to the baseline since roughly 30% of the pixels reach the max_iters escape time.
 
-Reworking the unrolling format from 4x4 blocks to 1x16 chunks also proves to be more useful since each cache line is 64 bytes (i.e., 16 pixels), meaning we have a more cache-friendly structure.
+Reworking the unrolling format from 4x4 blocks to 1x16 chunks also proves to be more useful since each cache line is 64 bytes (i.e., 16 pixels), meaning we have a more cache-friendly structure. This means that writes are cache-friendly and faster.
 
 Finally, there are a number of mathematical optimizations we could do, but a lot of them tend to have floating-point drift due to the reordering of non-associative floating-point operations.
 
