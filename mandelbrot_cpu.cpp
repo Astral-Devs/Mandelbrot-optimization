@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdint>
 #include <arm_neon.h>
+#include <omp.h>
 
 // CPU Scalar Mandelbrot set generation.
 // Based on the "optimized escape time algorithm" in
@@ -46,6 +47,7 @@ void mandelbrot_cpu_vector(uint32_t img_size, uint32_t max_iters, uint32_t *out)
     float32x4_t vescape_condition = vdupq_n_f32(float(4));
     uint32x4_t vone = vdupq_n_u32(float(1));
 
+    #pragma omp parallel for schedule(dynamic, 4)
     for (uint64_t i = 0; i < img_size; i += 4) {
         // 4 y values broadcasted
         float32x4_t cy_0 = vdupq_n_f32((float(i) / float(img_size)) * 2.5f - 1.25f);
@@ -340,8 +342,8 @@ void dump_image(
 //  g++ -march=native -O3 -Wall -Wextra -o mandelbrot mandelbrot_cpu.cc
 int main(int argc, char *argv[]) {
     // Get Mandelbrot spec.
-    uint32_t img_size = 1024;
-    uint32_t max_iters = 2000;
+    uint32_t img_size = 256;
+    uint32_t max_iters = 1000;
     enum MandelbrotImpl impl = ALL;
     if (ParseArgsAndMakeSpec(argc, argv, &img_size, &max_iters, &impl))
         return -1;
